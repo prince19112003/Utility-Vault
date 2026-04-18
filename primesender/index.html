@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Contact Splitter</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS for Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <style>
+        /* Custom scrollbar for better look in Dark Mode */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #1e293b; /* slate-800 */
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #475569; /* slate-600 */
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #64748b; /* slate-500 */
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <div class="text-center space-y-2">
+            <h1 class="text-3xl font-bold text-indigo-400">Bulk Contact Splitter</h1>
+            <p class="text-slate-400">Extract from Text, Excel, or PDF.</p>
+        </div>
+
+        <!-- Input Section -->
+        <div class="bg-slate-800 rounded-xl shadow-lg border border-slate-700 p-4">
+            
+            <div class="flex justify-between items-center mb-3">
+                <label class="block text-sm font-medium text-slate-300">
+                    Paste Numbers or Upload File
+                </label>
+                
+                <div>
+                    <input type="file" id="fileInput" class="hidden" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, application/pdf">
+                    <button id="uploadBtn" class="text-sm flex items-center gap-2 text-indigo-300 hover:text-indigo-200 font-medium bg-indigo-900/30 hover:bg-indigo-900/50 px-3 py-1.5 rounded-lg transition border border-indigo-500/30">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                        <span id="uploadBtnText">Upload Excel/PDF</span>
+                    </button>
+                </div>
+            </div>
+
+            <textarea id="rawInput" placeholder="Paste text here or upload a file..." 
+                class="w-full h-32 p-3 bg-slate-950 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition resize-y font-mono text-sm"></textarea>
+            
+            <div class="flex gap-3 mt-4">
+                <button id="processBtn" disabled class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-900/20">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    Process & Clean
+                </button>
+                
+                <button id="clearBtn" class="hidden bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    Clear
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsContainer" class="hidden space-y-5">
+            
+            <!-- Result Count Header -->
+            <div class="flex items-center justify-between px-1">
+                <h2 class="text-lg font-semibold text-slate-300">
+                    Results (<span id="countBadge" class="text-indigo-400">0</span> Contacts)
+                </h2>
+            </div>
+
+            <!-- SMART UTILITIES PANEL -->
+            <div class="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
+                <div class="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center gap-2">
+                    <i data-lucide="wrench" class="w-4 h-4 text-indigo-400"></i>
+                    <span class="text-sm font-medium text-slate-300">Action Utilities</span>
+                </div>
+                
+                <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Utility 1: VCF Export -->
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider bg-emerald-900/20 px-2 py-0.5 rounded">
+                                Bulk Method
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400 h-8">
+                            Download a file to save all numbers at once. Best for <b>adding members to a Group</b>.
+                        </p>
+                        <button id="vcfBtn" class="w-full bg-slate-700 hover:bg-emerald-600/20 hover:text-emerald-400 hover:border-emerald-500/50 text-slate-200 text-sm py-2 rounded-lg border border-slate-600 transition flex items-center justify-center gap-2 group">
+                            <i data-lucide="download" class="w-4 h-4 group-hover:scale-110 transition"></i> 
+                            Download .vcf File
+                        </button>
+                    </div>
+
+                    <!-- Utility 2: Link Attach -->
+                    <div class="space-y-2 border-t md:border-t-0 md:border-l border-slate-700 pt-4 md:pt-0 md:pl-6">
+                        <div class="flex items-center gap-2 mb-1">
+                             <span class="text-xs font-bold text-blue-400 uppercase tracking-wider bg-blue-900/20 px-2 py-0.5 rounded">
+                                Direct Method
+                            </span>
+                        </div>
+                         <p class="text-xs text-slate-400 h-8">
+                            Paste a <b>Group Link</b> or message here. It auto-attaches when you click WhatsApp below.
+                        </p>
+                        <div class="relative group">
+                            <input type="text" id="msgInput" placeholder="https://chat.whatsapp.com/..." 
+                                class="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-slate-200 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition placeholder-slate-600">
+                            <i data-lucide="link" class="absolute left-3 top-2.5 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition"></i>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div id="cardsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <!-- Cards will be injected here -->
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-10 text-slate-500">
+            <div class="inline-block p-3 bg-slate-800 rounded-full mb-3 border border-slate-700">
+                <i data-lucide="file-text" class="w-6 h-6 opacity-50 text-slate-400"></i>
+            </div>
+            <p>Ready! Paste numbers or upload a PDF/Excel file.</p>
+        </div>
+
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-slate-700 border border-slate-600 text-white px-4 py-2 rounded-lg shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 text-sm flex items-center gap-2">
+        <i data-lucide="info" class="w-4 h-4 text-indigo-400"></i>
+        <span id="toastMsg">Notification</span>
+    </div>
+
+    <script>
+        // --- State ---
+        let rawInput = "";
+        let contacts = [];
+        let isProcessingFile = false;
+
+        // --- DOM Elements ---
+        const rawInputEl = document.getElementById('rawInput');
+        const fileInputEl = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadBtnText = document.getElementById('uploadBtnText');
+        const processBtn = document.getElementById('processBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const vcfBtn = document.getElementById('vcfBtn');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const cardsGrid = document.getElementById('cardsGrid');
+        const emptyState = document.getElementById('emptyState');
+        const countBadge = document.getElementById('countBadge');
+        const toastEl = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMsg');
+        const msgInputEl = document.getElementById('msgInput');
+
+        // --- Initialization ---
+        lucide.createIcons();
+
+        // --- Event Listeners ---
+        rawInputEl.addEventListener('input', (e) => {
+            rawInput = e.target.value;
+            updateButtons();
+        });
+
+        uploadBtn.addEventListener('click', () => fileInputEl.click());
+        fileInputEl.addEventListener('change', handleFileUpload);
+        processBtn.addEventListener('click', processContacts);
+        clearBtn.addEventListener('click', clearAll);
+        vcfBtn.addEventListener('click', downloadVCF);
+
+        // --- Logic ---
+
+        function updateButtons() {
+            processBtn.disabled = !rawInput.trim() || isProcessingFile;
+            if (contacts.length > 0) {
+                clearBtn.classList.remove('hidden');
+                resultsContainer.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+                resultsContainer.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+            }
+        }
+
+        function processContacts() {
+            if (!rawInput.trim()) return;
+
+            const rawList = rawInput.split(/[,\n]+/);
+            
+            const cleanedList = rawList
+                .map(num => num.trim().replace(/[^0-9+]/g, ''))
+                .filter(num => num.length > 6);
+
+            const uniqueList = [...new Set(cleanedList)];
+            contacts = uniqueList;
+            
+            renderContacts();
+            updateButtons();
+        }
+
+        function renderContacts() {
+            cardsGrid.innerHTML = '';
+            countBadge.innerText = contacts.length;
+
+            contacts.forEach((contact, index) => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-800 p-4 rounded-lg border border-slate-700 shadow-sm hover:shadow-md hover:border-slate-600 transition flex items-center justify-between group fade-in";
+                
+                card.innerHTML = `
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <span class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-slate-700 text-slate-300 font-mono text-sm font-bold rounded-full border border-slate-600">
+                            #${index + 1}
+                        </span>
+                        <span class="font-mono text-lg text-slate-200 select-all truncate">${contact}</span>
+                    </div>
+                    
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button onclick="openWhatsApp('${contact}')" class="p-2.5 text-green-400 bg-green-900/20 hover:bg-green-900/40 border border-green-900/30 rounded-lg transition group-hover:bg-green-900/30" title="Send Link/Message">
+                            <i data-lucide="send" class="w-5 h-5"></i>
+                        </button>
+                        <button onclick="copyToClipboard('${contact}', this)" class="copy-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all duration-200 border bg-slate-900 text-slate-300 border-slate-700 hover:border-indigo-500 hover:text-indigo-400 hover:shadow-lg hover:shadow-indigo-500/10">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                `;
+                cardsGrid.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function clearAll() {
+            rawInput = "";
+            contacts = [];
+            rawInputEl.value = "";
+            msgInputEl.value = "";
+            renderContacts();
+            updateButtons();
+        }
+
+        function downloadVCF() {
+            if (contacts.length === 0) return;
+            
+            let vcfContent = "";
+            contacts.forEach((contact, index) => {
+                vcfContent += "BEGIN:VCARD\n";
+                vcfContent += "VERSION:3.0\n";
+                vcfContent += `FN:Bulk Contact ${index + 1}\n`;
+                vcfContent += `TEL;TYPE=CELL:${contact}\n`;
+                vcfContent += "END:VCARD\n";
+            });
+
+            const blob = new Blob([vcfContent], { type: "text/vcard" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "bulk_contacts.vcf";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("VCF File Downloaded! Check your Downloads folder.");
+        }
+
+        function openWhatsApp(number) {
+            const cleanNum = number.replace('+', '');
+            const message = msgInputEl.value.trim();
+            
+            let url = `https://wa.me/${cleanNum}`;
+            if (message) {
+                url += `?text=${encodeURIComponent(message)}`;
+            }
+            
+            window.open(url, '_blank');
+        }
+
+        function copyToClipboard(text, btnElement) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                
+                const originalContent = btnElement.innerHTML;
+                const originalClass = btnElement.className;
+
+                btnElement.className = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-sm transition-all duration-200 border bg-indigo-600 text-white border-indigo-500 shadow-sm shadow-indigo-900/50";
+                btnElement.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> <span>Copied</span>`;
+                lucide.createIcons();
+
+                setTimeout(() => {
+                    btnElement.className = originalClass;
+                    btnElement.innerHTML = `<i data-lucide="copy" class="w-4 h-4"></i> <span>Copy</span>`;
+                    lucide.createIcons();
+                }, 1500);
+
+            } catch (err) {
+                console.error('Unable to copy', err);
+                showToast("Failed to copy");
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // --- File Processing Logic ---
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            setIsProcessing(true);
+            
+            try {
+                if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv')) {
+                    await processExcel(file);
+                } else if (file.name.endsWith('.pdf')) {
+                    await processPDF(file);
+                } else {
+                    showToast("Please upload a valid Excel or PDF file.");
+                    setIsProcessing(false);
+                }
+            } catch (error) {
+                console.error(error);
+                showToast("Error reading file.");
+                setIsProcessing(false);
+            }
+            event.target.value = '';
+        }
+
+        function setIsProcessing(loading) {
+            isProcessingFile = loading;
+            uploadBtn.disabled = loading;
+            processBtn.disabled = loading;
+            
+            if (loading) {
+                uploadBtnText.innerText = "Reading...";
+                uploadBtn.classList.add('opacity-75');
+            } else {
+                uploadBtnText.innerText = "Upload Excel/PDF";
+                uploadBtn.classList.remove('opacity-75');
+            }
+            updateButtons();
+        }
+
+        function processExcel(file) {
+            return new Promise((resolve, reject) => {
+                if (!window.XLSX) {
+                    showToast("Excel library loading... try again.");
+                    reject(); return;
+                }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        let extractedData = [];
+                        
+                        workbook.SheetNames.forEach(sheetName => {
+                            const worksheet = workbook.Sheets[sheetName];
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                            if (jsonData && jsonData.length > 0) {
+                                const headers = jsonData[0].map(h => String(h || '').toLowerCase());
+                                const targetColIndex = headers.findIndex(h => h.match(/mobile|phone|contact|cell|whatsapp|tel/i) && !h.match(/email|address|id/i));
+                                
+                                if (targetColIndex !== -1) {
+                                    for (let i = 1; i < jsonData.length; i++) {
+                                        if (jsonData[i][targetColIndex]) extractedData.push(String(jsonData[i][targetColIndex]));
+                                    }
+                                } else {
+                                    extractedData.push(XLSX.utils.sheet_to_csv(worksheet));
+                                }
+                            }
+                        });
+                        appendToInput(extractedData.join('\n'));
+                        resolve();
+                    } catch (err) { reject(err); }
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function processPDF(file) {
+            if (!window.pdfjsLib) {
+                 showToast("PDF library loading... try again.");
+                 return;
+            }
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = '';
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+            }
+            appendToInput(fullText);
+        }
+
+        function appendToInput(text) {
+            const separator = rawInput.trim() ? '\n' : '';
+            rawInput += separator + text;
+            rawInputEl.value = rawInput;
+            setIsProcessing(false);
+            updateButtons();
+            showToast("File processed successfully!");
+        }
+
+        function showToast(msg) {
+            toastMsg.innerText = msg;
+            toastEl.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toastEl.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+    </script>
+</body>
+</html>
