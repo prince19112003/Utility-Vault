@@ -8,6 +8,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- HTML2Canvas for Saving Images -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Canvas Confetti for Celebration Effects -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
     
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700;800&display=swap');
@@ -162,9 +164,11 @@
       .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(244, 63, 94, 0.3); border-radius: 4px; }
 
-      /* FLIP CARD CSS */
+      /* FLIP CARD CSS - Constrained height to prevent off-screen stretching */
       .flip-container {
         perspective: 1500px;
+        height: 580px;
+        max-height: calc(100dvh - 5.5rem);
       }
       .flip-inner {
         position: relative;
@@ -173,19 +177,33 @@
         text-align: center;
         transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy transition */
         transform-style: preserve-3d;
-        display: grid; /* Allows stacking without absolute positioning height issues */
+        display: grid;
+        grid-template-rows: 100%;
+        grid-template-columns: 100%;
       }
       .flip-inner.flipped {
         transform: rotateY(180deg);
       }
       .flip-front, .flip-back {
-        grid-area: 1 / 1; /* Stack them on top of each other */
+        grid-area: 1 / 1;
         backface-visibility: hidden;
         -webkit-backface-visibility: hidden;
         width: 100%;
+        height: 100%;
+        max-height: 100%;
+        min-height: 0;
+      }
+      .flip-front {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        overflow-y: auto;
       }
       .flip-back {
         transform: rotateY(180deg);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
       }
 
       /* Long Press Feedback */
@@ -213,7 +231,7 @@
   <body class="h-screen bg-gradient-to-br from-pink-200 via-rose-100 to-indigo-200 text-gray-800 flex flex-col items-center justify-center overflow-hidden relative selection:bg-rose-300 selection:text-white px-4 pt-16 pb-4 sm:pt-20">
     
     <!-- Premium Trial Banner with Countdown (Fixed at Top) -->
-    <div id="premium-banner" class="fixed top-0 left-0 w-full z-[150] bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-[0_4px_15px_rgba(0,0,0,0.1)] transform -translate-y-full opacity-0 animate-banner-enter  transition-transform duration-500">
+    <div id="premium-banner" class="fixed top-0 left-0 w-full z-[150] bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow-[0_4px_15px_rgba(0,0,0,0.1)] transform -translate-y-full opacity-0 animate-banner-enter transition-transform duration-500">
       <div class="w-full max-w-md mx-auto px-6 py-3 flex flex-row items-center justify-between">
         <div class="flex items-center gap-3">
             <div class="bg-white/20 p-1.5 rounded-full">
@@ -221,7 +239,7 @@
             </div>
             <div class="flex flex-col text-left">
               <p class="text-[10px] uppercase font-bold tracking-widest text-rose-100 leading-none mb-0.5">Premium Trial</p>
-              <p class="text-[10px] text-white/90 leading-tight">Ends: Jan 1st, 2026</p>
+              <p class="text-[10px] text-white/90 leading-tight">Ends: Jan 1st, 2027</p>
             </div>
         </div>
         <div id="countdown-timer" class="font-['JetBrains_Mono'] text-sm sm:text-base font-bold text-yellow-300 tracking-wider tabular-nums leading-none drop-shadow-sm bg-black/20 px-3 py-1.5 rounded-lg border border-white/10">
@@ -276,7 +294,6 @@
         </div>
     </div>
 
-
     <!-- Splash Screen -->
     <div id="splash-screen" class="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center transition-opacity duration-1000 ease-out">
       <div class="flex flex-col items-center gap-6 animate-pulse">
@@ -309,8 +326,13 @@
         <!-- FRONT SIDE: CALCULATOR -->
         <div class="flip-front glass-panel rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-8 relative overflow-hidden group">
             
+            <!-- NEW: Audio Toggle Button (Synthesizer Chimes) -->
+            <button type="button" id="sound-toggle-btn" class="absolute top-5 right-5 z-20 p-2 rounded-full bg-white/40 hover:bg-white/80 text-rose-500 transition-all active:scale-90 border border-white/60 shadow-xs" title="Toggle Sound">
+                <i data-lucide="volume-2" class="w-4 h-4"></i>
+            </button>
+
             <!-- Header -->
-            <div id="header-title" class="relative z-10 text-center mb-6 sm:mb-10 cursor-default select-none active:scale-95 transition-transform duration-300">
+            <div id="header-title" class="relative z-10 text-center mb-6 sm:mb-8 cursor-default select-none active:scale-95 transition-transform duration-300">
                 <h1 class="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-transparent flex items-center justify-center gap-2 sm:gap-3 drop-shadow-sm filter">
                     <i data-lucide="sparkles" class="text-rose-400 w-5 h-5 sm:w-6 sm:h-6 animate-pulse"></i>
                     Love Calc
@@ -320,15 +342,23 @@
             </div>
 
             <!-- Input Form -->
-            <form id="love-form" class="space-y-5 sm:space-y-6 block relative z-10">
-                <div class="space-y-4 sm:space-y-5">
+            <form id="love-form" class="space-y-4 sm:space-y-5 block relative z-10">
+                <div class="space-y-3 sm:space-y-4 relative">
                     <div class="relative group/input">
-                    <input type="text" id="your-name" placeholder="Your Name" required class="glass-input w-full px-6 py-3.5 sm:py-4 rounded-xl outline-none text-base sm:text-lg placeholder-rose-300 font-bold text-gray-700" />
-                    <i data-lucide="heart" class="w-5 h-5 text-rose-300 absolute right-5 top-1/2 -translate-y-1/2 group-focus-within/input:text-rose-500 group-focus-within/input:scale-110 transition-all duration-300"></i>
+                      <input type="text" id="your-name" placeholder="Your Name" required class="glass-input w-full px-6 py-3.5 sm:py-4 rounded-xl outline-none text-base sm:text-lg placeholder-rose-300 font-bold text-gray-700" />
+                      <i data-lucide="heart" class="w-5 h-5 text-rose-300 absolute right-5 top-1/2 -translate-y-1/2 group-focus-within/input:text-rose-500 group-focus-within/input:scale-110 transition-all duration-300"></i>
                     </div>
+                    
+                    <!-- NEW: Swap Names Quick Button -->
+                    <div class="flex justify-center -my-2 relative z-10">
+                      <button type="button" id="swap-names-btn" class="bg-white/80 hover:bg-white text-rose-400 hover:text-rose-600 p-1.5 rounded-full shadow-sm border border-rose-200 hover:scale-110 active:rotate-180 transition-all duration-300" title="Swap Names">
+                        <i data-lucide="arrow-up-down" class="w-3.5 h-3.5"></i>
+                      </button>
+                    </div>
+
                     <div class="relative group/input">
-                    <input type="text" id="partner-name" placeholder="Partner's Name" required class="glass-input w-full px-6 py-3.5 sm:py-4 rounded-xl outline-none text-base sm:text-lg placeholder-rose-300 font-bold text-gray-700" />
-                    <i data-lucide="heart" class="w-5 h-5 text-rose-300 absolute right-5 top-1/2 -translate-y-1/2 group-focus-within/input:text-rose-500 group-focus-within/input:scale-110 transition-all duration-300"></i>
+                      <input type="text" id="partner-name" placeholder="Partner's Name" required class="glass-input w-full px-6 py-3.5 sm:py-4 rounded-xl outline-none text-base sm:text-lg placeholder-rose-300 font-bold text-gray-700" />
+                      <i data-lucide="heart" class="w-5 h-5 text-rose-300 absolute right-5 top-1/2 -translate-y-1/2 group-focus-within/input:text-rose-500 group-focus-within/input:scale-110 transition-all duration-300"></i>
                     </div>
                 </div>
 
@@ -364,8 +394,8 @@
              <div id="result-view" class="hidden relative z-10 text-center animate-fade-up">
                 
                 <!-- Capture Card -->
-                <div id="capture-card" class="bg-gradient-to-b from-white/40 to-white/10 p-5 rounded-[2rem] border border-white/60 shadow-lg mb-6">
-                    <div class="relative inline-block mb-2 w-48 h-48 sm:w-56 sm:h-56 filter drop-shadow-xl hover:scale-105 transition-transform duration-500">
+                <div id="capture-card" class="bg-gradient-to-b from-white/40 to-white/10 p-5 rounded-[2rem] border border-white/60 shadow-lg mb-4">
+                    <div class="relative inline-block mb-2 w-44 h-44 sm:w-52 sm:h-52 filter drop-shadow-xl hover:scale-105 transition-transform duration-500">
                         <svg viewBox="0 0 100 100" class="w-full h-full">
                         <defs>
                             <path id="heart-path" d="M50 88.9L16.7 55.6C7.2 46.1 7.2 30.9 16.7 21.4 26.2 11.9 41.4 11.9 50.9 21.4L50 22.3l-0.9-0.9C58.6 11.9 73.8 11.9 83.3 21.4c9.5 9.5 9.5 24.7 0 34.2L50 88.9z" />
@@ -398,13 +428,32 @@
                         </div>
                     </div>
                     
-                    <h2 id="result-names" class="text-2xl sm:text-3xl font-extrabold text-gray-800 mb-3 capitalize tracking-tight leading-tight px-2"></h2>
-                    <div class="flex justify-center">
-                        <span id="result-message" class="bg-white/80 text-rose-600 px-6 py-2 rounded-full font-bold shadow-sm border border-rose-100 text-xs sm:text-sm tracking-wide"></span>
+                    <h2 id="result-names" class="text-2xl sm:text-3xl font-extrabold text-gray-800 mb-2 capitalize tracking-tight leading-tight px-2"></h2>
+                    <div class="flex justify-center mb-3">
+                        <span id="result-message" class="bg-white/80 text-rose-600 px-5 py-1.5 rounded-full font-bold shadow-sm border border-rose-100 text-xs sm:text-sm tracking-wide"></span>
                     </div>
 
+                    <!-- NEW: Love Compatibility Vibe Metrics -->
+                    <div id="vibe-metrics" class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-rose-200/50 text-center">
+                        <div class="bg-white/50 backdrop-blur-xs p-2 rounded-xl border border-rose-100/60 shadow-xs">
+                            <p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Chemistry</p>
+                            <p id="metric-chemistry" class="text-xs sm:text-sm font-extrabold text-rose-600">--%</p>
+                        </div>
+                        <div class="bg-white/50 backdrop-blur-xs p-2 rounded-xl border border-rose-100/60 shadow-xs">
+                            <p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Trust</p>
+                            <p id="metric-trust" class="text-xs sm:text-sm font-extrabold text-pink-600">--%</p>
+                        </div>
+                        <div class="bg-white/50 backdrop-blur-xs p-2 rounded-xl border border-rose-100/60 shadow-xs">
+                            <p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Passion</p>
+                            <p id="metric-passion" class="text-xs sm:text-sm font-extrabold text-purple-600">--%</p>
+                        </div>
+                    </div>
+
+                    <!-- NEW: Connected report date element used by capture script -->
+                    <p id="report-date" class="text-[10px] text-rose-400 font-medium mt-3"></p>
+
                     <!-- Footer Watermark (Visible only during capture) -->
-                    <div class="header-watermark hidden mt-6 pt-4 border-t border-rose-200">
+                    <div class="header-watermark hidden mt-4 pt-3 border-t border-rose-200">
                         <div class="flex justify-between items-center text-gray-400 font-bold">
                             <span class="text-[10px] uppercase tracking-wider">Love Calculator App</span>
                             <div class="flex gap-1">
@@ -416,17 +465,22 @@
                     </div>
                 </div>
 
-                <!-- Action Buttons: Single Share Button -->
-                <div class="flex justify-center mb-6">
-                    <button id="share-partner-btn" class="w-full bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-rose-200 transition-all active:scale-95 flex items-center justify-center gap-2 transform hover:-translate-y-0.5">
-                        <i data-lucide="share-2" class="w-5 h-5"></i>
-                        <span>Share with Partner</span>
+                <!-- Action Buttons: Share + NEW Recalculate -->
+                <div class="flex flex-col sm:flex-row gap-2.5 justify-center mb-6">
+                    <button id="share-partner-btn" class="flex-1 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-rose-200 transition-all active:scale-95 flex items-center justify-center gap-2 transform hover:-translate-y-0.5 text-sm">
+                        <i data-lucide="share-2" class="w-4 h-4"></i>
+                        <span>Share Result</span>
+                    </button>
+
+                    <button type="button" id="recalculate-btn" class="bg-white/70 hover:bg-white text-rose-600 font-bold py-3.5 px-4 rounded-xl border border-rose-200 shadow-sm transition-all active:scale-95 flex items-center justify-center gap-2 transform hover:-translate-y-0.5 text-sm">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        <span>Calculate Again</span>
                     </button>
                 </div>
             </div>
 
             <!-- Microsoft Footer (Moved OUTSIDE result-view to be visible during Input) -->
-            <div  class="pt-6 border-t border-white/40 flex flex-col items-center justify-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-300 cursor-pointer">
+            <div class="pt-5 border-t border-white/40 flex flex-col items-center justify-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-300 cursor-pointer">
                 <div class="flex items-center gap-2 group/microsoft">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 23 23" class="w-3.5 h-3.5 group-hover/microsoft:animate-spin">
                     <path fill="#f35325" d="M1 1h10v10H1z" />
@@ -436,40 +490,73 @@
                     </svg>
                     <p class="text-[9px] font-bold text-rose-900 tracking-[0.2em] uppercase">Powered by Microsoft</p>
                 </div>
-                 <span id="secret-trigger-area" class="text-[9px] bg-white/50 px-3 py-1 rounded-full font-bold text-rose-700 shadow-sm border border-white/30 tracking-wider  cursor-none ">Beta Version</span>
+                <span id="secret-trigger-area" class="text-[9px] bg-white/50 px-3 py-1 rounded-full font-bold text-rose-700 shadow-sm border border-white/30 tracking-wider cursor-pointer select-none">Beta Version</span>
             </div>
 
         </div>
 
         <!-- BACK SIDE: ADMIN PANEL -->
-        <div id="admin-panel" class="flip-back glass-panel rounded-[2rem] sm:rounded-[2.5rem] p-6 shadow-2xl border-rose-200 flex flex-col h-full relative">
-            <div class="flex justify-between items-center mb-4 pb-2 border-b border-rose-200/50">
-                <h3 class="font-bold text-rose-700 flex items-center gap-2 text-base sm:text-lg"><i data-lucide="lock" class="w-5 h-5"></i> Secret Database</h3>
-                <button id="close-admin" class="text-xs text-rose-50 hover:bg-rose-500 bg-rose-400 transition-colors font-bold px-3 py-1.5 rounded-full shadow-md">Close</button>
+        <div id="admin-panel" class="flip-back glass-panel rounded-[2rem] sm:rounded-[2.5rem] p-4 sm:p-5 shadow-2xl border-rose-200 flex flex-col h-full relative overflow-hidden">
+            <!-- Sticky Admin Header with Clear Tabs & Always-Visible Close Button -->
+            <div class="flex justify-between items-center mb-2.5 pb-2 border-b border-rose-200/50 flex-shrink-0">
+                <!-- Tab Controls: Recent vs Older (Icon Only) -->
+                <div class="flex items-center gap-1 bg-white/60 p-1 rounded-xl border border-rose-200/70 shadow-2xs">
+                    <button type="button" id="tab-recent-btn" class="px-3 py-1 text-xs font-extrabold rounded-lg transition-all bg-rose-500 text-white shadow-xs flex items-center active:scale-95">
+                        <span>Recent</span>
+                    </button>
+                    <button type="button" id="tab-older-btn" class="p-1.5 text-xs font-bold rounded-lg transition-all text-rose-600 hover:bg-white/80 flex items-center justify-center active:scale-95" title="Archive">
+                        <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+
+                <button id="close-admin" class="p-1.5 text-xs text-rose-600 hover:text-rose-800 bg-white/70 hover:bg-white transition-colors font-bold rounded-xl border border-rose-200 shadow-2xs active:scale-95 flex items-center gap-1" title="Close Admin">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                    <span class="text-[11px] font-bold pr-1">Close</span>
+                </button>
             </div>
             
             <!-- SEARCH & SORT CONTROLS -->
-            <div class="flex gap-2 mb-3">
+            <div class="flex gap-1.5 mb-2 flex-shrink-0">
                 <div class="relative flex-1">
-                    <i data-lucide="search" class="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400"></i>
-                    <input type="text" id="admin-search" placeholder="Search names..." class="w-full pl-7 pr-2 py-1.5 text-xs border border-rose-100 rounded-lg focus:outline-none focus:border-rose-400 bg-white/50 placeholder-rose-300 text-gray-600">
+                    <i data-lucide="search" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"></i>
+                    <input type="text" id="admin-search" placeholder="Search names..." class="w-full pl-8 pr-2.5 py-1.5 text-xs border border-rose-100 rounded-xl focus:outline-none focus:border-rose-400 bg-white/60 placeholder-rose-300 text-gray-700">
                 </div>
-                <select id="admin-sort" class="text-xs border border-rose-100 rounded-lg px-2 py-1.5 focus:outline-none focus:border-rose-400 bg-white/50 text-gray-600">
+                <select id="admin-sort" class="text-xs border border-rose-100 rounded-xl px-2 py-1.5 focus:outline-none focus:border-rose-400 bg-white/60 text-gray-700">
                     <option value="newest">Newest</option>
                     <option value="oldest">Oldest</option>
                     <option value="high-score">High %</option>
                     <option value="low-score">Low %</option>
                 </select>
+                <button type="button" id="admin-select-btn" class="text-xs bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold px-2.5 py-1.5 rounded-xl border border-rose-200 transition-colors flex items-center gap-1 shadow-2xs select-none">
+                    <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
+                    <span id="select-btn-label">Select</span>
+                </button>
             </div>
 
-            <div class="flex-grow overflow-hidden relative rounded-xl bg-white/30 border border-white/50">
-                <div id="history-list" class="absolute inset-0 overflow-y-auto custom-scrollbar p-2 space-y-2 select-none">
-                    <p class="text-center text-rose-300 text-xs py-10">Connecting to Cloud...</p>
+            <!-- Multi-Select Action Toolbar (Shown when Select Mode is Active) -->
+            <div id="batch-action-bar" class="hidden mb-2 p-2 bg-gradient-to-r from-rose-100/90 to-pink-100/90 rounded-xl border border-rose-200/80 flex items-center justify-between gap-1.5 text-xs shadow-xs select-none animate-fade-up flex-shrink-0">
+                <div class="flex items-center gap-1.5">
+                    <button type="button" id="batch-select-all" class="text-[10px] bg-white/80 hover:bg-white text-rose-700 font-bold px-2 py-1 rounded-md border border-rose-200 transition-all">Select All</button>
+                    <span id="selected-count-label" class="text-[10px] font-extrabold text-rose-600">0 selected</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button type="button" id="batch-archive-btn" class="text-[10px] bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-2 py-1 rounded-md shadow-xs transition-all flex items-center gap-1">
+                        <i data-lucide="archive" class="w-3 h-3"></i> <span id="batch-archive-label">Move to Old</span>
+                    </button>
+                    <button type="button" id="batch-delete-btn" class="text-[10px] bg-rose-500 hover:bg-rose-600 text-white font-bold px-2 py-1 rounded-md shadow-xs transition-all flex items-center gap-1" title="Delete selected records">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i> Delete
+                    </button>
                 </div>
             </div>
-            <div class="mt-2 text-center">
-                <p class="text-[10px] text-rose-400 font-mono">Restricted Access • Admin Only</p>
-                <p class="text-[9px] text-rose-300/80 mt-1">Long press any record to delete</p>
+
+            <!-- In-App Notification Toast for Protected Actions -->
+            <div id="admin-toast" class="hidden mb-2 p-2 bg-rose-500 text-white text-[11px] font-bold rounded-xl text-center shadow-md transition-all flex-shrink-0"></div>
+
+            <!-- Scroll-Protected Record List Container -->
+            <div class="flex-1 min-h-0 overflow-hidden relative rounded-2xl bg-white/30 border border-white/60 p-2 flex flex-col">
+                <div id="history-list" class="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 select-none pr-0.5">
+                    <p class="text-center text-rose-300 text-xs py-10">Connecting to Cloud...</p>
+                </div>
             </div>
 
             <!-- DELETE MODAL (Hidden by default) -->
@@ -477,8 +564,8 @@
                 <div class="bg-rose-50 p-3 rounded-full mb-4">
                     <i data-lucide="trash-2" class="w-6 h-6 text-rose-500"></i>
                 </div>
-                <h3 class="text-rose-700 font-bold text-lg mb-1">Delete Record?</h3>
-                <p class="text-xs text-gray-500 mb-4 text-center">Enter master key to confirm deletion.</p>
+                <h3 id="delete-modal-title" class="text-rose-700 font-bold text-lg mb-1">Delete Record?</h3>
+                <p id="delete-modal-desc" class="text-xs text-gray-500 mb-4 text-center">Enter master key to confirm deletion.</p>
                 
                 <input type="password" id="master-key-input" placeholder="Master Key" class="w-full border border-rose-200 rounded-xl px-4 py-3 text-sm mb-4 focus:outline-none focus:border-rose-400 bg-white shadow-sm text-center tracking-widest">
                 
@@ -495,7 +582,7 @@
     <script type="module">
       import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
       import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-      import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+      import { getFirestore, collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
       // ==========================================
       // FIREBASE CONFIG
@@ -526,6 +613,77 @@
       let itemToDeleteId = null;
       const MASTER_KEY = "pr98";
 
+      let isSelectMode = false;
+      const selectedItemIds = new Set();
+      let isBatchDeleteOperation = false;
+
+      // CUTOFF TIMESTAMP: Existing records before this session update are classified as Older Data
+      const ARCHIVE_CUTOFF_TIMESTAMP = 1788780000000;
+      let currentView = 'recent'; // 'recent' or 'older'
+
+      // Toast Notification Helper
+      function showAdminToast(msg) {
+        const toast = document.getElementById('admin-toast');
+        if (!toast) return;
+        toast.textContent = msg;
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 2500);
+      }
+
+      // Format timestamp into date with only hour and minute
+      function formatDateTime(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        const datePart = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const timePart = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        return `${datePart} • ${timePart}`;
+      }
+
+      // NEW: Audio Synthesizer State (Zero external audio files needed)
+      let soundEnabled = true;
+      let audioCtx = null;
+
+      function playSound(type) {
+        if (!soundEnabled) return;
+        try {
+          if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+
+          const now = audioCtx.currentTime;
+
+          if (type === 'heartbeat') {
+            // Low heart thump
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(90, now);
+            osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.13);
+          } else if (type === 'fanfare') {
+            // Sweet harp chime arpeggio
+            [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+              const osc = audioCtx.createOscillator();
+              const gain = audioCtx.createGain();
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(freq, now + i * 0.12);
+              gain.gain.setValueAtTime(0.18, now + i * 0.12);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.4);
+              osc.connect(gain);
+              gain.connect(audioCtx.destination);
+              osc.start(now + i * 0.12);
+              osc.stop(now + i * 0.12 + 0.45);
+            });
+          }
+        } catch (e) {
+          console.warn('Audio note error:', e);
+        }
+      }
+
       // 0. SPLASH SCREEN & INIT
       window.addEventListener('load', () => {
         const splash = document.getElementById('splash-screen');
@@ -547,7 +705,7 @@
       function startCountdown() {
         const countdownEl = document.getElementById('countdown-timer');
         if (!countdownEl) return;
-        const targetDate = new Date('January 1, 2026 00:00:00').getTime();
+        const targetDate = new Date('January 1, 2027 00:00:00').getTime();
 
         function updateTimer() {
             const now = new Date().getTime();
@@ -560,7 +718,7 @@
 
             const days = Math.floor(distance / (1000 * 60 * 60 * 24));
             const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const minutes = Math.floor((distance % (1000 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
             const d = days < 10 ? "0" + days : days;
@@ -633,6 +791,30 @@
       const confirmDeleteBtn = document.getElementById('confirm-delete');
       const masterKeyInput = document.getElementById('master-key-input');
 
+      // Archive / Older Records Elements
+      const tabRecentBtn = document.getElementById('tab-recent-btn');
+      const tabOlderBtn = document.getElementById('tab-older-btn');
+      const batchArchiveLabel = document.getElementById('batch-archive-label');
+
+      // NEW Elements
+      const recalculateBtn = document.getElementById('recalculate-btn');
+      const swapNamesBtn = document.getElementById('swap-names-btn');
+      const soundToggleBtn = document.getElementById('sound-toggle-btn');
+      const adminCountBadge = document.getElementById('admin-count-badge');
+      const metricChemistry = document.getElementById('metric-chemistry');
+      const metricTrust = document.getElementById('metric-trust');
+      const metricPassion = document.getElementById('metric-passion');
+
+      const adminSelectBtn = document.getElementById('admin-select-btn');
+      const selectBtnLabel = document.getElementById('select-btn-label');
+      const batchActionBar = document.getElementById('batch-action-bar');
+      const batchSelectAllBtn = document.getElementById('batch-select-all');
+      const selectedCountLabel = document.getElementById('selected-count-label');
+      const batchArchiveBtn = document.getElementById('batch-archive-btn');
+      const batchDeleteBtn = document.getElementById('batch-delete-btn');
+      const deleteModalTitle = document.getElementById('delete-modal-title');
+      const deleteModalDesc = document.getElementById('delete-modal-desc');
+
       const loadingMessages = [
         'Scanning Biometrics... 💓',
         'Calculating Vibe Match... 🔮',
@@ -640,6 +822,51 @@
         'Decoding Fate Lines... 📜',
         'Finalizing Report... 📊',
       ];
+
+      // NEW: Swap Names Listener
+      if (swapNamesBtn) {
+        swapNamesBtn.addEventListener('click', () => {
+          const input1 = document.getElementById('your-name');
+          const input2 = document.getElementById('partner-name');
+          const temp = input1.value;
+          input1.value = input2.value;
+          input2.value = temp;
+          if (navigator.vibrate) navigator.vibrate(25);
+        });
+      }
+
+      // NEW: Sound Toggle Listener
+      if (soundToggleBtn) {
+        soundToggleBtn.addEventListener('click', () => {
+          soundEnabled = !soundEnabled;
+          soundToggleBtn.innerHTML = soundEnabled 
+            ? '<i data-lucide="volume-2" class="w-4 h-4"></i>'
+            : '<i data-lucide="volume-x" class="w-4 h-4 text-gray-400"></i>';
+          lucide.createIcons();
+        });
+      }
+
+      // NEW: Recalculate (Try Again) Listener
+      if (recalculateBtn) {
+        recalculateBtn.addEventListener('click', () => {
+          resultView.classList.add('hidden');
+          form.classList.remove('hidden');
+          document.getElementById('your-name').value = '';
+          document.getElementById('partner-name').value = '';
+          document.getElementById('your-name').focus();
+
+          // Reset liquid level
+          if (liquidLevel) {
+            liquidLevel.style.transition = 'none';
+            liquidLevel.setAttribute('transform', 'translate(0, 100)');
+          }
+
+          // Restore top banner if it was shown
+          if (premiumBanner) {
+            premiumBanner.classList.remove('-translate-y-full', 'opacity-0');
+          }
+        });
+      }
 
       // 4. Calculate Logic
       form.addEventListener('submit', async e => {
@@ -653,9 +880,13 @@
         form.classList.add('hidden');
         loadingState.classList.remove('hidden');
 
+        playSound('heartbeat');
+        if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+
         let msgIndex = 0;
         loadingText.textContent = loadingMessages[0];
         const msgInterval = setInterval(() => {
+          playSound('heartbeat');
           loadingText.style.opacity = '0.5';
           setTimeout(() => {
             msgIndex = (msgIndex + 1) % loadingMessages.length;
@@ -667,20 +898,33 @@
         setTimeout(async () => {
           clearInterval(msgInterval);
 
-          // NEW LOGIC: Prince + Tejashvi = 97%
-          const name1 = yourName.toLowerCase();
-          const name2 = partnerName.toLowerCase();
+          // Symmetrical and normalized names
+          const clean1 = yourName.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+          const clean2 = partnerName.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
           let percentage;
 
-          if ((name1.includes('prince') && name2.includes('tejashvi')) ||
-              (name1.includes('tejashvi') && name2.includes('prince'))) {
-              percentage = 97;
+          // 1. Check if this exact pair already exists in the database to guarantee repetition consistency
+          const existingRecord = allMatchesData.find(m => {
+            const m1 = (m.name1 || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            const m2 = (m.name2 || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            return (m1 === clean1 && m2 === clean2) || (m1 === clean2 && m2 === clean1);
+          });
+
+          if (existingRecord && typeof existingRecord.percentage === 'number') {
+            percentage = existingRecord.percentage;
+          } else if ((clean1.includes('prince') && clean2.includes('tejashvi')) ||
+                     (clean2.includes('prince') && clean1.includes('tejashvi'))) {
+            percentage = 97;
           } else {
-              // Existing random calculation
-              const combined = (yourName + partnerName).toLowerCase().replace(/[^a-z]/g, '');
-              let sum = 0;
-              for (let i = 0; i < combined.length; i++) sum += combined.charCodeAt(i);
-              percentage = sum % 101;
+            // Symmetrical deterministic hash for repeat stability (Person A + B = Person B + A)
+            const sortedPair = [clean1, clean2].sort().join('|');
+            let hash = 0;
+            for (let i = 0; i < sortedPair.length; i++) {
+              hash = ((hash << 5) - hash) + sortedPair.charCodeAt(i);
+              hash |= 0;
+            }
+            const absHash = Math.abs(hash);
+            percentage = (absHash % 62) + 38; // Always stable between 38% - 99%
           }
 
           let message = 'Run Away! 🏃💨';
@@ -688,6 +932,16 @@
           else if (percentage > 75) message = 'True Love! ✨';
           else if (percentage > 50) message = 'Good Potential 😊';
           else if (percentage > 30) message = 'Just Friends? 🤔';
+
+          // Deterministic Sub-Metrics derived directly from the pair and score
+          const seed = (percentage * 7) % 100;
+          const chemVal = Math.min(100, Math.max(25, percentage + ((seed % 15) - 7)));
+          const trustVal = Math.min(100, Math.max(30, percentage + (((seed * 3) % 15) - 5)));
+          const passVal = Math.min(100, Math.max(20, percentage + (((seed * 5) % 19) - 9)));
+
+          if (metricChemistry) metricChemistry.textContent = `${chemVal}%`;
+          if (metricTrust) metricTrust.textContent = `${trustVal}%`;
+          if (metricPassion) metricPassion.textContent = `${passVal}%`;
 
           // ------------------------------------
           // PHASE 1: OVERLAY REVEAL
@@ -750,6 +1004,17 @@
              if(loadingState) loadingState.classList.add('hidden');
              if(resultView) resultView.classList.remove('hidden');
 
+             // NEW: Sound & Confetti on high score
+             playSound('fanfare');
+             if (percentage > 70 && typeof confetti === 'function') {
+               confetti({
+                 particleCount: 75,
+                 spread: 60,
+                 origin: { y: 0.6 },
+                 colors: ['#f43f5e', '#fda4af', '#ec4899', '#ffffff']
+               });
+             }
+
              // Hide overlay completely after fade out
              setTimeout(() => {
                 if(resultOverlay) resultOverlay.classList.add('hidden');
@@ -764,6 +1029,7 @@
                 name2: partnerName,
                 percentage: percentage,
                 timestamp: Date.now(),
+                isNew: true // Tags new records so older legacy records remain isolated and protected
               });
             } catch (err) {
               console.error('Error saving match:', err);
@@ -939,11 +1205,147 @@
         adminSortSelect.addEventListener('change', renderAdminList);
       }
 
-      // DELETE FEATURE LOGIC
+      function updateSelectedCounter() {
+        if (selectedCountLabel) {
+          selectedCountLabel.textContent = `${selectedItemIds.size} selected`;
+        }
+      }
+
+      if (adminSelectBtn) {
+        adminSelectBtn.addEventListener('click', () => {
+          isSelectMode = !isSelectMode;
+          selectedItemIds.clear();
+          updateSelectedCounter();
+
+          if (isSelectMode) {
+            selectBtnLabel.textContent = 'Cancel';
+            adminSelectBtn.classList.replace('bg-rose-100', 'bg-rose-500');
+            adminSelectBtn.classList.replace('text-rose-700', 'text-white');
+            batchActionBar.classList.remove('hidden');
+          } else {
+            selectBtnLabel.textContent = 'Select';
+            adminSelectBtn.classList.replace('bg-rose-500', 'bg-rose-100');
+            adminSelectBtn.classList.replace('text-white', 'text-rose-700');
+            batchActionBar.classList.add('hidden');
+          }
+          renderAdminList();
+        });
+      }
+
+      if (batchSelectAllBtn) {
+        batchSelectAllBtn.addEventListener('click', () => {
+          if (selectedItemIds.size === allMatchesData.length) {
+            selectedItemIds.clear();
+            batchSelectAllBtn.textContent = 'Select All';
+          } else {
+            allMatchesData.forEach(m => selectedItemIds.add(m.id));
+            batchSelectAllBtn.textContent = 'Deselect All';
+          }
+          updateSelectedCounter();
+          renderAdminList();
+        });
+      }
+
+      // Move Selected Items (Toggle between Archive and Recent)
+      if (batchArchiveBtn) {
+        batchArchiveBtn.addEventListener('click', async () => {
+          if (selectedItemIds.size === 0) {
+            showAdminToast("Select at least 1 record!");
+            return;
+          }
+
+          const targetIsArchive = currentView === 'recent';
+
+          try {
+            const promises = Array.from(selectedItemIds).map(id => 
+              updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'love_matches', id), {
+                isNew: !targetIsArchive,
+                isOlder: targetIsArchive,
+                archived: targetIsArchive
+              })
+            );
+            await Promise.all(promises);
+            showAdminToast(targetIsArchive 
+              ? `Moved ${selectedItemIds.size} record(s) to Older Records!` 
+              : `Moved ${selectedItemIds.size} record(s) to Recent Records!`);
+            selectedItemIds.clear();
+            updateSelectedCounter();
+          } catch (err) {
+            showAdminToast("Error updating records: " + err.message);
+          }
+        });
+      }
+
+      // Batch Delete Trigger
+      if (batchDeleteBtn) {
+        batchDeleteBtn.addEventListener('click', () => {
+          if (currentView === 'older') {
+            showAdminToast("🔒 Older records are permanent and cannot be deleted!");
+            return;
+          }
+
+          const deletableIds = Array.from(selectedItemIds).filter(id => {
+            const m = allMatchesData.find(item => item.id === id);
+            return m && !m.isOlder;
+          });
+
+          if (deletableIds.length === 0) {
+            showAdminToast("Select at least 1 recent record to delete!");
+            return;
+          }
+
+          isBatchDeleteOperation = true;
+          itemToDeleteId = null;
+          if (deleteModalTitle) deleteModalTitle.textContent = `Delete ${deletableIds.length} Records?`;
+          if (deleteModalDesc) deleteModalDesc.textContent = `Enter master key to confirm deleting ${deletableIds.length} selected records.`;
+          masterKeyInput.value = '';
+          deleteModal.classList.remove('hidden');
+        });
+      }
+
+      // Tab Navigation Listeners: Recent vs Older Records
+      if (tabRecentBtn) {
+        tabRecentBtn.addEventListener('click', () => {
+          if (currentView === 'recent') return;
+          currentView = 'recent';
+          selectedItemIds.clear();
+          updateSelectedCounter();
+          updateViewUI();
+          renderAdminList();
+        });
+      }
+
+      if (tabOlderBtn) {
+        tabOlderBtn.addEventListener('click', () => {
+          if (currentView === 'older') return;
+          currentView = 'older';
+          selectedItemIds.clear();
+          updateSelectedCounter();
+          updateViewUI();
+          renderAdminList();
+        });
+      }
+
+      function updateViewUI() {
+        if (currentView === 'older') {
+          if (tabRecentBtn) tabRecentBtn.className = 'px-3 py-1 text-xs font-bold rounded-lg transition-all text-rose-600 hover:bg-white/80 flex items-center active:scale-95';
+          if (tabOlderBtn) tabOlderBtn.className = 'p-1.5 text-xs font-extrabold rounded-lg transition-all bg-indigo-500 text-white shadow-xs flex items-center justify-center active:scale-95';
+          if (batchArchiveLabel) batchArchiveLabel.textContent = 'Move to Recent';
+          if (batchDeleteBtn) batchDeleteBtn.classList.add('hidden'); // Older records cannot be deleted
+        } else {
+          if (tabRecentBtn) tabRecentBtn.className = 'px-3 py-1 text-xs font-extrabold rounded-lg transition-all bg-rose-500 text-white shadow-xs flex items-center active:scale-95';
+          if (tabOlderBtn) tabOlderBtn.className = 'p-1.5 text-xs font-bold rounded-lg transition-all text-rose-600 hover:bg-white/80 flex items-center justify-center active:scale-95';
+          if (batchArchiveLabel) batchArchiveLabel.textContent = 'Move to Old';
+          if (batchDeleteBtn) batchDeleteBtn.classList.remove('hidden');
+        }
+        lucide.createIcons();
+      }
+
       if (cancelDeleteBtn) {
         cancelDeleteBtn.addEventListener('click', () => {
             deleteModal.classList.add('hidden');
             itemToDeleteId = null;
+            isBatchDeleteOperation = false;
             masterKeyInput.value = '';
         });
       }
@@ -951,19 +1353,66 @@
       if (confirmDeleteBtn) {
         confirmDeleteBtn.addEventListener('click', async () => {
             const key = masterKeyInput.value.trim();
-            if (key === MASTER_KEY && itemToDeleteId) {
+
+            if (key !== MASTER_KEY) {
+                masterKeyInput.classList.add('border-red-500', 'animate-pulse');
+                setTimeout(() => masterKeyInput.classList.remove('border-red-500', 'animate-pulse'), 500);
+                return;
+            }
+
+            // Case A: Batch Delete Multiple Selected Records (Protected against older records)
+            if (isBatchDeleteOperation && selectedItemIds.size > 0) {
+                try {
+                    const deletableIds = Array.from(selectedItemIds).filter(id => {
+                        const m = allMatchesData.find(item => item.id === id);
+                        return m && !m.isOlder;
+                    });
+
+                    if (deletableIds.length === 0) {
+                        showAdminToast("🔒 Older records are permanently protected and cannot be deleted!");
+                        deleteModal.classList.add('hidden');
+                        isBatchDeleteOperation = false;
+                        masterKeyInput.value = '';
+                        return;
+                    }
+
+                    const count = deletableIds.length;
+                    const promises = deletableIds.map(id =>
+                        deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'love_matches', id))
+                    );
+                    await Promise.all(promises);
+                    selectedItemIds.clear();
+                    updateSelectedCounter();
+                    deleteModal.classList.add('hidden');
+                    isBatchDeleteOperation = false;
+                    masterKeyInput.value = '';
+                    showAdminToast(`Deleted ${count} recent record(s) successfully.`);
+                } catch (err) {
+                    showAdminToast('Error during batch delete: ' + err.message);
+                }
+                return;
+            }
+
+            // Case B: Single Item Delete (Strictly blocked if older record)
+            if (itemToDeleteId) {
+                const target = allMatchesData.find(m => m.id === itemToDeleteId);
+                if (target && target.isOlder) {
+                    showAdminToast("🔒 Older records are permanently protected and cannot be deleted!");
+                    deleteModal.classList.add('hidden');
+                    itemToDeleteId = null;
+                    masterKeyInput.value = '';
+                    return;
+                }
+
                 try {
                     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'love_matches', itemToDeleteId));
                     deleteModal.classList.add('hidden');
                     itemToDeleteId = null;
                     masterKeyInput.value = '';
-                    // List will auto-update via snapshot
+                    showAdminToast("Record deleted successfully.");
                 } catch (err) {
-                    alert('Error deleting: ' + err.message);
+                    showAdminToast('Error deleting: ' + err.message);
                 }
-            } else {
-                masterKeyInput.classList.add('border-red-500', 'animate-pulse');
-                setTimeout(() => masterKeyInput.classList.remove('border-red-500', 'animate-pulse'), 500);
             }
         });
       }
@@ -972,7 +1421,13 @@
       function setupRealtimeListener() {
         const q = collection(db, 'artifacts', appId, 'public', 'data', 'love_matches');
         onSnapshot(q, snapshot => {
-          allMatchesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          allMatchesData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            // Flag as older record if explicitly archived or predates cutoff
+            const isOlder = data.archived === true || (!data.isNew && (!data.timestamp || data.timestamp <= ARCHIVE_CUTOFF_TIMESTAMP));
+            return { id: doc.id, ...data, isOlder };
+          });
+          updateViewUI();
           renderAdminList();
         }, error => {
           console.error('Listen Error:', error);
@@ -983,10 +1438,13 @@
       function renderAdminList() {
         if(!historyList) return;
         
-        const searchTerm = adminSearchInput ? adminSearchInput.value.toLowerCase() : '';
+        const searchTerm = adminSearchInput ? adminSearchInput.value.toLowerCase().trim() : '';
         const sortType = adminSortSelect ? adminSortSelect.value : 'newest';
 
-        let filtered = allMatchesData.filter(m => 
+        // Filter by the active view: Recent vs Older
+        const currentData = allMatchesData.filter(m => currentView === 'older' ? m.isOlder : !m.isOlder);
+
+        let filtered = currentData.filter(m => 
             (m.name1 && m.name1.toLowerCase().includes(searchTerm)) || 
             (m.name2 && m.name2.toLowerCase().includes(searchTerm))
         );
@@ -999,51 +1457,96 @@
             return 0;
         });
 
-        if (filtered.length === 0) {
-            historyList.innerHTML = '<p class="text-center text-rose-300 text-xs py-2">No matches found.</p>';
-            return;
-        }
-
-        // Attach event handlers manually after rendering string
-        historyList.innerHTML = ''; // Clear current
-        
-        filtered.forEach(match => {
+        // Helper to construct row element with multi-select support and clean styling
+        function createRowElement(match) {
             const itemDiv = document.createElement('div');
-            itemDiv.className = 'flex justify-between items-center bg-white/60 p-3 rounded-2xl border border-white/50 text-xs hover:bg-white hover:shadow-md transition-all duration-300 cursor-default group mb-2 active:scale-95 select-none';
+            const isChecked = selectedItemIds.has(match.id);
+            const isArchive = match.isOlder;
+
+            itemDiv.className = `flex justify-between items-center ${isArchive ? 'bg-white/75 border-rose-100/90' : 'bg-white/60 border-white/60 hover:bg-white'} p-2.5 rounded-2xl border text-xs transition-all duration-300 cursor-pointer select-none group active:scale-[0.98] ${isChecked ? 'ring-2 ring-rose-400 bg-rose-50/90' : ''}`;
+
+            const dateTimeLabel = formatDateTime(match.timestamp);
+
             itemDiv.innerHTML = `
-                <div class="font-bold text-gray-600 capitalize flex items-center gap-2 pointer-events-none">
-                    <span>${match.name1}</span>
-                    <span class="text-rose-400 text-[10px] group-hover:scale-125 transition-transform">❤️</span>
-                    <span>${match.name2}</span>
+                <div class="flex items-center gap-2.5 pointer-events-none">
+                  ${isSelectMode ? `
+                    <div class="w-4 h-4 rounded-md border ${isChecked ? 'bg-rose-500 border-rose-500 text-white' : 'border-rose-300 bg-white'} flex items-center justify-center transition-colors">
+                      ${isChecked ? '<i data-lucide="check" class="w-3 h-3 text-white"></i>' : ''}
+                    </div>
+                  ` : ''}
+                  <div class="flex flex-col text-left">
+                    <div class="font-bold text-gray-700 capitalize flex items-center gap-1.5 text-xs sm:text-[13px]">
+                        <span>${match.name1}</span>
+                        <span class="text-rose-400 text-[10px] group-hover:scale-125 transition-transform">❤️</span>
+                        <span>${match.name2}</span>
+                    </div>
+                    ${dateTimeLabel ? `<span class="text-[9px] text-gray-400 font-mono mt-0.5">${dateTimeLabel}</span>` : ''}
+                  </div>
                 </div>
-                <div class="font-extrabold ${getScoreColor(match.percentage)} bg-white/50 px-2 py-1 rounded-lg pointer-events-none">
-                    ${match.percentage}%
+                <div class="flex items-center gap-2 pointer-events-none">
+                  <div class="font-extrabold ${getScoreColor(match.percentage)} bg-white/70 px-2.5 py-1 rounded-xl shadow-2xs text-xs">
+                      ${match.percentage}%
+                  </div>
                 </div>
             `;
 
-            // Long Press Logic
-            itemDiv.addEventListener('mousedown', () => startLongPress(match.id, itemDiv));
-            itemDiv.addEventListener('touchstart', () => startLongPress(match.id, itemDiv));
-            
-            const cancel = () => {
-                clearTimeout(longPressTimer);
-                itemDiv.classList.remove('holding');
-            };
-            
-            itemDiv.addEventListener('mouseup', cancel);
-            itemDiv.addEventListener('mouseleave', cancel);
-            itemDiv.addEventListener('touchend', cancel);
-            itemDiv.addEventListener('touchmove', cancel);
+            // Click interaction for multi-select
+            itemDiv.addEventListener('click', () => {
+                if (isSelectMode) {
+                    if (selectedItemIds.has(match.id)) {
+                        selectedItemIds.delete(match.id);
+                    } else {
+                        selectedItemIds.add(match.id);
+                    }
+                    updateSelectedCounter();
+                    renderAdminList();
+                } else if (isArchive) {
+                    // Inform the user that older records are permanent
+                    showAdminToast("🔒 Older records are permanently protected and cannot be deleted.");
+                }
+            });
 
-            historyList.appendChild(itemDiv);
-        });
+            // Long Press to Delete is strictly enabled ONLY for Recent records (never for older records)
+            if (!isSelectMode && !isArchive) {
+                itemDiv.addEventListener('mousedown', () => startLongPress(match.id, itemDiv));
+                itemDiv.addEventListener('touchstart', () => startLongPress(match.id, itemDiv));
+
+                const cancel = () => {
+                    clearTimeout(longPressTimer);
+                    itemDiv.classList.remove('holding');
+                };
+
+                itemDiv.addEventListener('mouseup', cancel);
+                itemDiv.addEventListener('mouseleave', cancel);
+                itemDiv.addEventListener('touchend', cancel);
+                itemDiv.addEventListener('touchmove', cancel);
+            }
+
+            return itemDiv;
+        }
+
+        // Render Active List
+        historyList.innerHTML = '';
+        if (filtered.length === 0) {
+            historyList.innerHTML = `<p class="text-center text-rose-300 text-xs py-8">${currentView === 'older' ? 'No older records found.' : 'No recent matches found.'}</p>`;
+        } else {
+            filtered.forEach(match => {
+                historyList.appendChild(createRowElement(match));
+            });
+        }
+
+        lucide.createIcons();
       }
 
       function startLongPress(id, element) {
         element.classList.add('holding');
         longPressTimer = setTimeout(() => {
             itemToDeleteId = id;
+            isBatchDeleteOperation = false;
             element.classList.remove('holding');
+            if (deleteModalTitle) deleteModalTitle.textContent = "Delete Record?";
+            if (deleteModalDesc) deleteModalDesc.textContent = "Enter master key to confirm deletion.";
+            masterKeyInput.value = '';
             deleteModal.classList.remove('hidden');
         }, 800); // 800ms long press
       }
